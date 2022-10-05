@@ -2,13 +2,15 @@ package client
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"github.com/satori/go.uuid"
+	"github.com/voximplant/pds-sample-client/service"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"io"
 	"log"
-	"pds-sample/service"
 )
 
 // Buffer size for preloaded task
@@ -34,6 +36,11 @@ func NewConn(hostCfg *HostConf) (*grpc.ClientConn, error) {
 	var additionalDealOpt = make([]grpc.DialOption, 0)
 	if !hostCfg.UseTls {
 		additionalDealOpt = append(additionalDealOpt, grpc.WithInsecure())
+	} else {
+		config := &tls.Config{
+			InsecureSkipVerify: false,
+		}
+		additionalDealOpt = append(additionalDealOpt, grpc.WithTransportCredentials(credentials.NewTLS(config)))
 	}
 	conn, err := grpc.Dial(hostCfg.GetAddr(), additionalDealOpt...)
 	if err != nil {
@@ -91,7 +98,7 @@ func (c *agent) Start() error {
 			},
 			AccountId:        c.authConf.AccountID,
 			ApiKey:           c.authConf.ApiKey,
-			RuleId:           c.pdsConf.RuleID,
+			Rule:             &service.Init_RuleId{RuleId: c.pdsConf.RuleID},
 			ReferenceIp:      c.pdsConf.ReferenceIP,
 			QueueId:          c.pdsConf.QueueID,
 			MaximumErrorRate: c.pdsConf.MaximumErrorRate,

@@ -11,14 +11,26 @@ message Init {
     Statistic init_stat = 1;
     sint32 account_id = 2;
     string api_key = 3;
-    sint32 rule_id = 4;
+    oneof rule {
+        sint32 rule_id = 4;
+        string rule_name = 18; // Rule name available only with application
+    }
     string reference_ip = 5;
     sint32 queue_id = 6;
     string session_id = 10; // optional. use to continue processing after disconnect
 
     double maximum_error_rate = 12; // default: 0.02
 
-    sint32 version = 13;
+    ACD acd_version = 15;
+    enum ACD {
+        V1 = 0;
+        SQ = 1;
+    }
+    oneof application {
+        sint32 application_id = 16; // for working with SQ
+        string application_name = 19;
+    }
+    TaskMultiplier task_multiplier = 17; //for progressive
 }
 
 message Statistic {
@@ -55,18 +67,36 @@ message InitResponse {
     string session_id = 1;
 }
 
+message TaskEvent {
+    enum Type {
+        STARTED = 0;
+    }
+    string taskUUID = 1;
+    Type type = 2;
+}
+
 message ServiceMessage {
     enum Type {
         GET_TASK = 0;
         INIT_RESPONSE = 1;
+        TASK_EVENT = 2;
     }
 
     Type type = 1;
     GetTask request = 2;
     InitResponse init = 3;
+    TaskEvent event = 4;
 }
 
 
+
+message TaskMultiplier {
+    float multiplier = 1;
+}
+
 service PDS {
     rpc Start (stream RequestMessage) returns (stream ServiceMessage);
+
+    rpc StartProgressive (stream RequestMessage) returns (stream ServiceMessage);
+
 }
