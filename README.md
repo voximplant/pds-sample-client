@@ -1,11 +1,11 @@
-## Installation
-To generate a client from the `.proto` files, run the command `./generate_proto.sh`.
-
+## Build
 ### Requirements
-* Golang 1.12
-* Installed package `go get -u google.golang.org/grpc@v1.20.1`
+* Golang 1.17
+* `make` utils
 
-## Protocol Usage
+Run `make compile` command to build the app.
+
+## Protocol usage
 1. A `PDS.Start` method is used to open a bidirectional connection. Right after the method execution, you have to send an initialization request for a PDS agent (`message RequestMessage`, request type: `INIT`).
 2. Then wait for `message ServiceMessage` of type `INIT_RESPONSE`. This response contains a `session_id` field which value has to be stored and used in further initializations to have access to accumulated stats.
 3. Wait for request from a server, `message ServiceMessage` of type `GET_TASK`. 

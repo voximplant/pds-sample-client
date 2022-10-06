@@ -8,7 +8,7 @@ import (
 var _defaultHost = &HostConf{
 	Host:   "pds.voximplant.com",
 	Port:   3000,
-	UseTls: true,
+	UseTls: false,
 }
 
 type HostConf struct {
@@ -56,8 +56,8 @@ func (p *PDSConf) Validate() error {
 }
 
 type AgentConfig struct {
-	Auth      *AuthConf
-	Host      *HostConf
+	Auth *AuthConf
+	Host *HostConf
 }
 
 func NewAuth(accountID int32, apiKey string) *AuthConf {
@@ -76,7 +76,7 @@ func NewAgentProperties(auth *AuthConf) (*AgentConfig, error) {
 		return nil, errors.New("not found required params")
 	}
 	return &AgentConfig{
-		Auth:      auth,
-		Host:      DefaultHostConfig(),
+		Auth: auth,
+		Host: DefaultHostConfig(),
 	}, nil
 }

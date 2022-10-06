@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/satori/go.uuid"
-	"pds-sample/client"
+	"github.com/voximplant/pds-sample-client/client"
 	"time"
 )
 
@@ -43,7 +43,7 @@ func main() {
 		}
 	}()
 
-	for repeat := 5; repeat > 0; repeat -- {
+	for repeat := 5; repeat > 0; repeat-- {
 		err = agent.Start()
 		if err != nil {
 			time.Sleep(2 * time.Second)
