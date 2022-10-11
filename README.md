@@ -1,40 +1,48 @@
+# Voximplant PDS client
+
 ## Build
-### Requirements
+
+To build a Voximplant PDS client, make sure the following requirements are installed
 * Golang 1.17
-* `make` utils
+* `make` utils 
 
-Run `make compile` command to build the app.
+Then run `make compile` to build the client.
+  
+## Protocol initialization
 
-## Protocol usage
-1. A `PDS.Start` method is used to open a bidirectional connection. Right after the method execution, you have to send an initialization request for a PDS agent (`message RequestMessage`, request type: `INIT`).
-2. Then wait for `message ServiceMessage` of type `INIT_RESPONSE`. This response contains a `session_id` field which value has to be stored and used in further initializations to have access to accumulated stats.
-3. Wait for request from a server, `message ServiceMessage` of type `GET_TASK`. 
-4. After receiving a `GET_TASK` request you have to send the needed volume of tasks as quick as possible.
+1. After opening a bidirectional connection via the `PDS.Start` method, send a PDS agent initialization request: `message RequestMessage` of the `INIT` type).
+2. Wait for a response to the initialization request: `message ServiceMessage` of the `INIT_RESPONSE` type. The response contains the `session_id`. You can save it to use in future initializations to use the accumulated statistics.
+3. Wait for the request from the server: `message ServiceMessage` of the `GET_TASK` type.
+4. After receiving the `GET_TASK` request, send the desired tasks as soon as possible.
+   
+## Nuances
 
-## Features
-1. If you send more tasks than needed or send tasks without receiving an appropriate request, the connection will be closed.
-2. Any Voximplant-related errors (e.g., an error of scenario starting) can cause the connection close. In such a case, you have to call the `PDS.Start` method again and follow the initialization procedure to open a bidirectional connection.
+1. If you send more tasks than the server requested, or if you send the task before getting the request, the connection will be closed.
+2. If you receive any Voximplant-related errors (e.g. scenario start error), the connection may be closed. In this case, call the `PDS.Start` method again and repeat the initialization process again.
+   
+## PDS behavior in different situations
 
-## Distribution Changes
-– increasing of the number of operators speeds up distribution of tasks
-– increasing of conversation and processing time slows down distribution of tasks
-– increasing of hit rate slows down distribution of tasks
-– number of free operators speeds up distribution of tasks (not significantly)
- 
+- if you the number of operators increases, the task distribution becomes quicker
+- if the call duration increases, the task distribution becomes slower
+- if the answer percentage improves, the task distribution becomes slower
+- if the number of free operators increases, the task distribution becomes slightly quicker
+  
+### PDS behavior when changing working conditions
 
-### Possible Circumstances 
-– hit rate has increased drastically: there will be a peak queue of incoming customers. When the queue size reduces, PDS will work according to a new hit rate value.
-– hit rate has decreased drastically: the waiting time increases and it takes about 2-3 minutes for processing to adjust to new conditions and become stable again. The final adjusting time depends on the number of operators and especially on conversation and processing time – the bigger the latter is, the longer the adjusting time.
-– conversation time has increased: there will be a peak queue of incoming customers.
-– conversation time has decreased: the waiting time will be longer.
-- the number of operators has increased: in general, calling to customers will be increased too, but if the number of operators has increased **drastically**, the waiting time could be temporarily longer. 
-– the number of operators has decreased: there will be a peak queue of incoming customers. When the queue size reduces, PDS will work according to current conditions.
+- if the answer percentage suddenly increases, the customer queue peaks at the start. After the queue normalizes, PDS will work according to the new statistics
+- if the answer percentage suddenly decreases, the operator waiting time decreases. It takes about 2-3 minutes for PDS to adapt to the new statistics (depends on the number of operators and the call duration: the higher the call duration, the more time it takes to adapt to the new statistics)
+- if the call duration increases, the customer queue peaks at the start
+- if the call duration decreases, the operator waiting time increases
+- if the number of operators increases, the dialing time decreases. If the number of operators highly increases, the operator waiting time can temporarily increase
+- if the number of operators decreases, the customer queue increases. After the queue normalizes, PDS will work according to the new statistics
+  
+## VoxEngine scenario
 
-## VoxEngine Scenario
-* Parameters are received in the following format:
+* The scenario parameters are received in the following format:
+  
 ```
 {
-    "users_data":{}, // custom json with a phone number, customer's name, etc. 
+    "users_data":{}, // custom json with a phone number, customer's name and etc 
     "task_uuid" : "string",
     "agent_uuid": "string",
     "queue_id": 1,
@@ -42,7 +50,9 @@ Run `make compile` command to build the app.
     "callback_url":"https://pds.voximplant.com/v1/result"
 }
 ```
-* Parameters' parcing:
+
+* Parameters parsing:
+  
 ```javascript
 var data = JSON.parse(VoxEngine.customData());
 Logger.write(JSON.stringify(data.users_data)); // custom data with customer's information
@@ -70,13 +80,16 @@ function sendResult(status) {
 		postData: JSON.stringify(pd)
 	});
 }
-
 ```
-* If a call is successful, a request should be sent:
+
+* Send the following request if the call succeeds:
+  
 ```javascript
 sendResult("DIAL_COMPLETE");
 ```
-* If a call is failed, another request should be sent:
+
+* Send the following request if the call fails:
+  
 ```javascript
 sendResult("FAIL");
 ```
