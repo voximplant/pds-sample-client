@@ -5,12 +5,13 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
-	"github.com/satori/go.uuid"
+	"io"
+	"log"
+
+	uuid "github.com/satori/go.uuid"
 	"github.com/voximplant/pds-sample-client/service"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"io"
-	"log"
 )
 
 // Buffer size for preloaded task
@@ -103,6 +104,8 @@ func (c *agent) Start() error {
 			QueueId:          c.pdsConf.QueueID,
 			MaximumErrorRate: c.pdsConf.MaximumErrorRate,
 			SessionId:        c.pdsConf.SessionID,
+			Application:      &service.Init_ApplicationId{ApplicationId: c.pdsConf.ApplicationID},
+			AcdVersion:       service.Init_SQ,
 		},
 	}
 
