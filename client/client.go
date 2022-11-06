@@ -109,6 +109,10 @@ func (c *agent) Start() error {
 		},
 	}
 
+	if c.pdsConf.TaskMultiplier > 0 {
+		initConf.Init.TaskMultiplier = &service.TaskMultiplier{Multiplier: c.pdsConf.TaskMultiplier}
+	}
+
 	cntx := context.Background()
 	stream, err := c.client.Start(cntx)
 	if err != nil {

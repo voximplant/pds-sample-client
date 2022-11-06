@@ -35,6 +35,7 @@ type PDSConf struct {
 	MaximumErrorRate  float64
 	SessionID         string
 	ApplicationID     int32
+	TaskMultiplier    float32
 }
 
 func (p *PDSConf) Validate() error {
