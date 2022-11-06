@@ -2,13 +2,15 @@ package main
 
 import (
 	"fmt"
-	"github.com/satori/go.uuid"
-	"github.com/voximplant/pds-sample-client/client"
 	"time"
+
+	uuid "github.com/satori/go.uuid"
+	"github.com/voximplant/pds-sample-client/client"
 )
 
 func main() {
-	prop, err := client.NewAgentProperties(client.NewAuth(1, "1234567890"))
+	//TODO: put account id and API key below
+	prop, err := client.NewAgentProperties(client.NewAuth(1, "api-key"))
 	if err != nil {
 		panic(err)
 	}
@@ -18,15 +20,20 @@ func main() {
 	}
 	defer conn.Close()
 
-	agent, err := client.NewAgent(conn, prop.Auth, &client.PDSConf{
-		RuleID:            1,
-		QueueID:           1,
-		ReferenceIP:       "127.0.0.1",
+	pdsConfig := client.PDSConf{
+		RuleID:            1, //TODO: Put your rule id here
+		QueueID:           1, //TODO: Put SmartQueue queue id here
+		ReferenceIP:       "69.167.178.4",
 		AvgTimeTalkSec:    80.0,
 		PercentSuccessful: 0.4,
 		MaximumErrorRate:  0.05,
 		SessionID:         uuid.NewV4().String(),
-	})
+		ApplicationID:     1, //TODO: Put your application id here
+	}
+	//TODO: Uncommend following line to enable progressive mode instead of predictive.
+	//pdsConfig.TaskMultiplier = 1
+
+	agent, err := client.NewAgent(conn, prop.Auth, &pdsConfig)
 	if err != nil {
 		panic(err)
 	}
@@ -36,6 +43,7 @@ func main() {
 		defer close(taskChan)
 		for {
 			// send task to agent
+			//TODO: send actual call list data to service
 			tmpTask := map[string]interface{}{
 				"phone_number": "1234567",
 			}
