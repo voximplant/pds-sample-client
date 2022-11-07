@@ -7,7 +7,7 @@ import (
 
 var _defaultHost = &HostConf{
 	Host:   "pds.voximplant.com",
-	Port:   3000,
+	Port:   3005,
 	UseTls: false,
 }
 
@@ -34,6 +34,8 @@ type PDSConf struct {
 	PercentSuccessful float64
 	MaximumErrorRate  float64
 	SessionID         string
+	ApplicationID     int32
+	TaskMultiplier    float32
 }
 
 func (p *PDSConf) Validate() error {
