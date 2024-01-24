@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -26,7 +27,9 @@ func main() {
 		ReferenceIP:       "69.167.178.4",
 		AvgTimeTalkSec:    80.0,
 		PercentSuccessful: 0.4,
-		MaximumErrorRate:  0.05,
+		MaximumErrorRate:  0.05,                           // TODO: config for Abandonment rate optimized solutions
+		MinimumBusyFactor: 0.8,                            // TODO: config for busy factor optimized solutions
+		PredictiveType:    client.AbandonRateOptimization, // TODO: change it to switch predictive algorithm
 		SessionID:         uuid.NewV4().String(),
 		ApplicationID:     1, //TODO: Put your application id here
 	}
@@ -52,10 +55,16 @@ func main() {
 	}()
 
 	for repeat := 5; repeat > 0; repeat-- {
-		err = agent.Start()
+		err = runAgent(context.Background(), agent)
 		if err != nil {
 			time.Sleep(2 * time.Second)
 			fmt.Println(err)
 		}
 	}
+}
+
+func runAgent(ctx context.Context, agent client.PDSAgent) error {
+	cc, cancel := context.WithCancel(ctx)
+	defer cancel()
+	return agent.Start(cc)
 }

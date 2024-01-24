@@ -5,8 +5,11 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/keepalive"
 	"io"
 	"log"
+	"time"
 
 	uuid "github.com/satori/go.uuid"
 	"github.com/voximplant/pds-sample-client/service"
@@ -18,7 +21,7 @@ import (
 const _bufferSize = 100
 
 type PDSAgent interface {
-	Start() error
+	Start(ctx context.Context) error
 	GetTaskChannel() chan<- map[string]interface{}
 	ChangeErrorRate(value float64) error
 }
@@ -30,18 +33,41 @@ type agent struct {
 	pdsConf   *PDSConf
 	client    service.PDSClient
 	rcErrRate chan float64
-	done      chan interface{}
+}
+
+func parsePredictiveType(ptype PredictiveType) service.Init_PredictiveType {
+	switch ptype {
+	case AbandonRateOptimization:
+		return service.Init_AR_OPTIMIZED
+	case BusyFactorOptimization:
+		return service.Init_BF_OPTIMIZED
+	case SmallGroupAbandonRateOptimization:
+		return service.Init_AR_SMALL_GROUP
+	case AutoBalancedAbandonRateOptimization:
+		return service.Init_AR_AUTO_BALANCED
+	default:
+		return service.Init_DEFAULT
+	}
 }
 
 func NewConn(hostCfg *HostConf) (*grpc.ClientConn, error) {
-	var additionalDealOpt = make([]grpc.DialOption, 0)
+	var additionalDealOpt []grpc.DialOption
 	if !hostCfg.UseTls {
-		additionalDealOpt = append(additionalDealOpt, grpc.WithInsecure())
-	} else {
-		config := &tls.Config{
-			InsecureSkipVerify: false,
+		additionalDealOpt = []grpc.DialOption{
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		}
-		additionalDealOpt = append(additionalDealOpt, grpc.WithTransportCredentials(credentials.NewTLS(config)))
+	} else {
+		additionalDealOpt = []grpc.DialOption{
+			grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{})),
+			grpc.WithConnectParams(grpc.ConnectParams{
+				MinConnectTimeout: 2 * time.Second,
+			}),
+			grpc.WithKeepaliveParams(keepalive.ClientParameters{
+				Time:                20 * time.Second,
+				Timeout:             3 * time.Second,
+				PermitWithoutStream: true,
+			}),
+		}
 	}
 	conn, err := grpc.Dial(hostCfg.GetAddr(), additionalDealOpt...)
 	if err != nil {
@@ -65,7 +91,6 @@ func NewAgent(conn *grpc.ClientConn, authConf *AuthConf, pdsConf *PDSConf) (PDSA
 		authConf:  authConf,
 		RcTask:    make(chan map[string]interface{}, _bufferSize),
 		rcErrRate: make(chan float64),
-		done:      make(chan interface{}),
 	}
 	return res, nil
 }
@@ -85,11 +110,7 @@ func (c *agent) ChangeErrorRate(value float64) error {
 	return nil
 }
 
-func (c *agent) Stop() {
-	close(c.done)
-}
-
-func (c *agent) Start() error {
+func (c *agent) Start(ctx context.Context) error {
 	initConf := service.RequestMessage{
 		Type: service.RequestMessage_INIT,
 		Init: &service.Init{
@@ -97,15 +118,17 @@ func (c *agent) Start() error {
 				AvgTimeTalkSec:    c.pdsConf.AvgTimeTalkSec,
 				PercentSuccessful: c.pdsConf.PercentSuccessful,
 			},
-			AccountId:        c.authConf.AccountID,
-			ApiKey:           c.authConf.ApiKey,
-			Rule:             &service.Init_RuleId{RuleId: c.pdsConf.RuleID},
-			ReferenceIp:      c.pdsConf.ReferenceIP,
-			QueueId:          c.pdsConf.QueueID,
-			MaximumErrorRate: c.pdsConf.MaximumErrorRate,
-			SessionId:        c.pdsConf.SessionID,
-			Application:      &service.Init_ApplicationId{ApplicationId: c.pdsConf.ApplicationID},
-			AcdVersion:       service.Init_SQ,
+			AccountId:         c.authConf.AccountID,
+			ApiKey:            c.authConf.ApiKey,
+			Rule:              &service.Init_RuleId{RuleId: c.pdsConf.RuleID},
+			ReferenceIp:       c.pdsConf.ReferenceIP,
+			QueueId:           c.pdsConf.QueueID,
+			MaximumErrorRate:  c.pdsConf.MaximumErrorRate,
+			MinimumBusyFactor: c.pdsConf.MinimumBusyFactor,
+			SessionId:         c.pdsConf.SessionID,
+			Application:       &service.Init_ApplicationId{ApplicationId: c.pdsConf.ApplicationID},
+			AcdVersion:        service.Init_SQ,
+			PredictiveType:    parsePredictiveType(c.pdsConf.PredictiveType),
 		},
 	}
 
@@ -113,8 +136,7 @@ func (c *agent) Start() error {
 		initConf.Init.TaskMultiplier = &service.TaskMultiplier{Multiplier: c.pdsConf.TaskMultiplier}
 	}
 
-	cntx := context.Background()
-	stream, err := c.client.Start(cntx)
+	stream, err := c.client.Start(ctx)
 	if err != nil {
 		return err
 	}
@@ -122,6 +144,24 @@ func (c *agent) Start() error {
 	if err != nil {
 		return err
 	}
+
+	go func() {
+		pingTimeout := time.NewTicker(30 * time.Second)
+		defer pingTimeout.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				log.Println("[PING routine] Receive stop signal")
+				return
+			case <-pingTimeout.C:
+				err := stream.Send(&service.RequestMessage{Type: service.RequestMessage_PING})
+				if err != nil {
+					log.Println("Error send PING:", err)
+					return
+				}
+			}
+		}
+	}()
 
 	waitc := make(chan error)
 	go func() {
@@ -174,7 +214,7 @@ func (c *agent) Start() error {
 	select {
 	case err := <-waitc:
 		return err
-	case <-c.done:
+	case <-ctx.Done():
 		stream.CloseSend()
 	}
 	return nil

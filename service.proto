@@ -1,5 +1,6 @@
 syntax = "proto3";
 
+option go_package = "./service";
 
 message PutTask {
     bytes customData = 1;
@@ -8,6 +9,13 @@ message PutTask {
 
 
 message Init {
+    enum PredictiveType {
+        DEFAULT = 0;
+        AR_OPTIMIZED = 1; // PDS uses abandoned calls control rate for answered calls. Works for a large number of operators (more than 20).
+        BF_OPTIMIZED = 2; // PDS uses agent busy factor control algorithm. Works for a large number of operators (more than 20).
+        AR_SMALL_GROUP = 3;  // PDS uses abandoned calls control rate for answered calls. Works only when the number of agents is less than 20.
+        AR_AUTO_BALANCED = 4; // PDS uses abandoned calls control rate for answered calls. Works as a combination of AR_OPTIMIZED and AR_SMALL_GROUP algorithms.
+    }
     Statistic init_stat = 1;
     sint32 account_id = 2;
     string api_key = 3;
@@ -20,6 +28,9 @@ message Init {
     string session_id = 10; // optional. use to continue processing after disconnect
 
     double maximum_error_rate = 12; // default: 0.02
+    double minimum_busy_factor = 20; // default: 0.8
+
+    PredictiveType predictive_type = 21;
 
     ACD acd_version = 15;
     enum ACD {
@@ -44,18 +55,27 @@ message ErrRate {
     double maximum_error_rate = 1;
 }
 
+message BusyFactor {
+    double minimum_busy_factor = 1;
+}
+
 message RequestMessage {
     enum Type {
         PUT_TASK = 0;
         INIT = 1;
         SET_STATISTIC = 2;
         SET_ERROR_RATE = 3;
+        SET_TASK_MULTIPLIER = 4;
+        SET_BUSY_FACTOR = 5;
+        PING = 10;
     }
     Type type = 1;
     PutTask task = 2;
     Init init = 3;
     Statistic statistic = 4;
     ErrRate errRate = 5;
+    TaskMultiplier taskMultiplier = 6;
+    BusyFactor busyFactor = 7;
 }
 
 
@@ -80,6 +100,7 @@ message ServiceMessage {
         GET_TASK = 0;
         INIT_RESPONSE = 1;
         TASK_EVENT = 2;
+        PONG = 10;
     }
 
     Type type = 1;
@@ -89,6 +110,21 @@ message ServiceMessage {
 }
 
 
+enum CompleteType {
+    SUCCESS = 0;
+    FAIL = 1;
+    DIAL_COMPLETE = 2;
+}
+
+message CompleteRequest {
+    string agent = 1;
+    string task_uuid = 2;
+    CompleteType type = 3;
+}
+
+message HealthCheckRequest {
+    string agent = 1;
+}
 
 message TaskMultiplier {
     float multiplier = 1;
