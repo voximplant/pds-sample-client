@@ -5,10 +5,20 @@ import (
 	"fmt"
 )
 
+type PredictiveType int
+
+const (
+	DefaultPredictiveType               PredictiveType = iota // Default is AbandonRateOptimize
+	AbandonRateOptimization                                   // PDS uses abandoned calls control rate for answered calls. Works for a large number of operators (more than 20)..
+	BusyFactorOptimization                                    // PDS uses agent busy factor control algorithm. Works for a large number of operators (more than 20).
+	SmallGroupAbandonRateOptimization                         // PDS uses abandoned calls control rate for answered calls. Works only when the number of agents is less than 20.
+	AutoBalancedAbandonRateOptimization                       // PDS uses abandoned calls control rate for answered calls. Works as a combination of AbandonRateOptimize and SmallGroupAbandonRateOptimize algorithms.
+)
+
 var _defaultHost = &HostConf{
 	Host:   "pds.voximplant.com",
 	Port:   3005,
-	UseTls: false,
+	UseTls: true,
 }
 
 type HostConf struct {
@@ -33,9 +43,11 @@ type PDSConf struct {
 	AvgTimeTalkSec    float64
 	PercentSuccessful float64
 	MaximumErrorRate  float64
+	MinimumBusyFactor float64
 	SessionID         string
 	ApplicationID     int32
 	TaskMultiplier    float32
+	PredictiveType    PredictiveType
 }
 
 func (p *PDSConf) Validate() error {
