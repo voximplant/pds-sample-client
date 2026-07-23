@@ -1,20 +1,32 @@
 syntax = "proto3";
 
-option go_package = "./service";
+option go_package = "github.com/voximplant/pds-sample-client/protogen";
+
 
 message PutTask {
     bytes customData = 1;
     string taskUUID = 2;
 }
 
+enum BufferSizeTarget {
+  VALUE = 0;
+  OPERATOR = 1;
+  AGENT = 2;
+}
+
+message Buffer {
+  BufferSizeTarget size_target = 1;
+  sint32 size_value = 2;
+  double threshold_factor = 3;
+}
 
 message Init {
     enum PredictiveType {
         DEFAULT = 0;
-        AR_OPTIMIZED = 1; // PDS uses abandoned calls control rate for answered calls. Works for a large number of operators (more than 20).
-        BF_OPTIMIZED = 2; // PDS uses agent busy factor control algorithm. Works for a large number of operators (more than 20).
-        AR_SMALL_GROUP = 3;  // PDS uses abandoned calls control rate for answered calls. Works only when the number of agents is less than 20.
-        AR_AUTO_BALANCED = 4; // PDS uses abandoned calls control rate for answered calls. Works as a combination of AR_OPTIMIZED and AR_SMALL_GROUP algorithms.
+        AR_OPTIMIZED = 1; // optimized abandonment rate solution
+        BF_OPTIMIZED = 2; // optimized busy factor solution
+        AR_SMALL_GROUP = 3;  // optimized abandonment rate solution for a small group of agents
+        AR_AUTO_BALANCED = 4; // optimized abandonment rate solution with automatic adaptation to agent's count
     }
     Statistic init_stat = 1;
     sint32 account_id = 2;
@@ -27,15 +39,19 @@ message Init {
     sint32 queue_id = 6;
     string session_id = 10; // optional. use to continue processing after disconnect
 
+    double maximum_waiting_time_ms = 11; // deprecated
     double maximum_error_rate = 12; // default: 0.02
     double minimum_busy_factor = 20; // default: 0.8
 
     PredictiveType predictive_type = 21;
+    bool use_extended_task_status = 22;
+    Buffer buffer = 23;
 
+    sint32 version = 13;
     ACD acd_version = 15;
     enum ACD {
         V1 = 0;
-        SQ = 1;
+        V2 = 1;
     }
     oneof application {
         sint32 application_id = 16; // for working with SQ
@@ -90,6 +106,9 @@ message InitResponse {
 message TaskEvent {
     enum Type {
         STARTED = 0;
+        CANCELLED = 1; // cancelled task happens on reconnect with old session id
+        FAILED = 2; // failed to start
+        UNKNOWN = 3; // we dont know task status
     }
     string taskUUID = 1;
     Type type = 2;
@@ -114,17 +133,10 @@ enum CompleteType {
     SUCCESS = 0;
     FAIL = 1;
     DIAL_COMPLETE = 2;
+    TRANSFER = 3;
+    AMD_STATUS = 4;
 }
 
-message CompleteRequest {
-    string agent = 1;
-    string task_uuid = 2;
-    CompleteType type = 3;
-}
-
-message HealthCheckRequest {
-    string agent = 1;
-}
 
 message TaskMultiplier {
     float multiplier = 1;
@@ -134,5 +146,4 @@ service PDS {
     rpc Start (stream RequestMessage) returns (stream ServiceMessage);
 
     rpc StartProgressive (stream RequestMessage) returns (stream ServiceMessage);
-
 }

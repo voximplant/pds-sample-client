@@ -1,38 +1,31 @@
-.PHONY: compile
-PROTOC_GEN_GO := $(GOPATH)/bin/protoc-gen-go
+PROTO_DIR := proto
+GO_GEN_DIR := protogen
+PROTO_FILE := $(PROTO_DIR)/pds.proto
+APP_BIN := bin/pds-sample-client
 
-# If $GOPATH/bin/protoc-gen-go does not exist, we'll run this command to install it.
-$(PROTOC_GEN_GO):
-	@echo "Run protoc gen go"
-	@go get -u github.com/golang/protobuf/protoc-gen-go
+.PHONY: generate install-tools clean regenerate build run
 
-.PHONY: proto
-proto:
-	@echo ">> generating code from proto files"
-	@./scripts/generate_proto.sh
+generate:
+	mkdir -p $(GO_GEN_DIR)
+	protoc \
+		--proto_path=$(PROTO_DIR) \
+		--go_out=$(GO_GEN_DIR) \
+		--go_opt=paths=source_relative \
+		--go-grpc_out=$(GO_GEN_DIR) \
+		--go-grpc_opt=paths=source_relative \
+		$(PROTO_FILE)
 
+install-tools:
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 
-APP_BIN = ./bin/pds-sample-client
-
-${APP_BIN}: compile
-
-recompile: compile
-
-GOOS ?= "linux"
-ARCH ?= "amd64"
-
-compile:
-	@echo "compiling pds-sample-client...."
-	@env GOOS=$(GOOS) GOARCH=$(ARCH) go build -o ./bin/pds-sample-client ./
-
-run: $(APP_BIN)
-	@echo "Starting PDS client..."
-	@./bin/pds-sample-client
-
-
-.PHONY: clean
 clean:
-	@rm -rf ./tmp
-	@rm -rf ./bin
-	@rm -rf ./logs
+	rm -rf $(GO_GEN_DIR) $(APP_BIN)
 
+regenerate: clean generate
+
+build:
+	go build -o $(APP_BIN) .
+
+run: build
+	./$(APP_BIN)

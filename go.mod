@@ -1,18 +1,21 @@
 module github.com/voximplant/pds-sample-client
 
-go 1.17
+go 1.26.3
 
 require (
-	github.com/satori/go.uuid v1.2.0
-	google.golang.org/grpc v1.49.0
-	google.golang.org/protobuf v1.28.1
+	github.com/google/uuid v1.6.0
+	github.com/ilyakaznacheev/cleanenv v1.5.0
+	google.golang.org/grpc v1.82.1
+	google.golang.org/protobuf v1.36.11
 )
 
 require (
-	github.com/golang/protobuf v1.5.2 // indirect
-	golang.org/x/net v0.0.0-20201021035429-f5854403a974 // indirect
-	golang.org/x/sys v0.0.0-20210119212857-b64e53b001e4 // indirect
-	golang.org/x/text v0.3.3 // indirect
-	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013 // indirect
-	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
+	github.com/BurntSushi/toml v1.2.1 // indirect
+	github.com/joho/godotenv v1.5.1 // indirect
+	golang.org/x/net v0.53.0 // indirect
+	golang.org/x/sys v0.43.0 // indirect
+	golang.org/x/text v0.36.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260414002931-afd174a4e478 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
+	olympos.io/encoding/edn v0.0.0-20201019073823-d3554ca0b0a3 // indirect
 )
