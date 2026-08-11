@@ -1,14 +1,15 @@
 # Voximplant PDS sample client
 
-Minimal Go client for [Voximplant Predictive Dialer System (PDS)](https://voximplant.com/) over gRPC.
+Minimal Go client for the [Voximplant Predictive Dialer System (PDS)](https://voximplant.com/) over gRPC.
 
-The repository shows how to:
+This repository shows how to:
 
-- generate Go code from `proto/pds.proto`
+- generate Go code from [`proto/pds.proto`](proto/pds.proto)
 - open a bidirectional PDS stream
 - send the `INIT` handshake
 - react to `GET_TASK` requests from the server
 - push call-list records as `PUT_TASK` messages
+- observe `TASK_EVENT` updates and keep the stream alive with `PING`
 
 ## Requirements
 
@@ -18,7 +19,7 @@ The repository shows how to:
 
 ## Quick start
 
-1. Copy environment template:
+1. Copy the environment template:
 
 ```bash
 cp .env.example .env
@@ -33,7 +34,7 @@ make build
 ./bin/pds-sample-client
 ```
 
-Configuration is loaded with [cleanenv](https://github.com/ilyakaznacheev/cleanenv) via `client.LoadConfig()` from `.env` (if present) and process environment variables. Env vars override file values.
+Configuration is loaded by `client.LoadConfig()` from `.env` (if present) and process environment variables. Env vars override file values.
 
 ## Protocol flow
 
@@ -43,20 +44,21 @@ Configuration is loaded with [cleanenv](https://github.com/ilyakaznacheev/cleane
 4. Wait for `ServiceMessage` with type `GET_TASK`.
 5. Send exactly the requested number of `PUT_TASK` messages.
 6. Handle `TASK_EVENT` updates from the server.
+7. Send `PING` periodically; expect `PONG`.
 
 Important rules:
 
 - Do not send tasks before `GET_TASK`.
-- Do not send more tasks than requested — the connection will be closed.
+- Do not send more (or fewer) tasks than requested — the connection will be closed.
 - On disconnect, reconnect and repeat initialization. Reuse `session_id` to keep accumulated statistics.
 
 ## Project layout
 
 ```text
-proto/pds.proto          # PDS gRPC contract
-protogen/                # generated Go types and gRPC stubs
-client/                  # PDS client + Config (cleanenv)
-main.go                  # runnable example
+proto/pds.proto   # PDS gRPC contract
+api/              # generated Go types and gRPC stubs
+client/           # config, dial, session loop
+main.go           # runnable example + demo task feeder
 ```
 
 ## Regenerate protobuf code
@@ -71,7 +73,7 @@ make generate
 Replace `feedSampleTasks` in `main.go` with your own integration. Each task is a JSON payload passed to the VoxEngine scenario:
 
 ```go
-agent.Tasks() <- client.Task{
+session.Tasks() <- client.Task{
     CustomData: map[string]any{
         "phone_number": "+1234567890",
         "customer_id":  42,

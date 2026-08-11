@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 )
 
-// Dial opens a gRPC connection to the PDS endpoint from Config.
+// Dial opens a gRPC connection to the configured PDS endpoint.
 func Dial(cfg Config) (*grpc.ClientConn, error) {
 	var opts []grpc.DialOption
 	if cfg.UseTLS {

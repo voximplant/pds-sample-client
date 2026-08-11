@@ -1,51 +1,89 @@
+// PDS gRPC contract for the Voximplant Predictive Dialer System.
+// Clients open a bidirectional stream, send INIT, then respond to GET_TASK
+// with PUT_TASK messages and observe TASK_EVENT updates.
 syntax = "proto3";
 
-option go_package = "github.com/voximplant/pds-sample-client/protogen";
+option go_package = "github.com/voximplant/pds-sample-client/api";
 
-
+// PutTask is a single dialing job submitted by the client.
 message PutTask {
+    // Opaque JSON payload forwarded to the VoxEngine scenario as users_data.
     bytes customData = 1;
+    // Client-generated task identifier used to correlate TASK_EVENT updates.
     string taskUUID = 2;
+    string max_execution_time = 3; // timeOnly
+    string min_execution_time = 6; // timeOnly
 }
 
 enum BufferSizeTarget {
-  VALUE = 0;
-  OPERATOR = 1;
-  AGENT = 2;
+    VALUE = 0;
+    OPERATOR = 1;
+    AGENT = 2;
+    DYNAMIC = 3; // deprecated
+    SMART = 4;
 }
 
+// Buffer configures predictive dialer buffering behaviour.
 message Buffer {
-  BufferSizeTarget size_target = 1;
-  sint32 size_value = 2;
-  double threshold_factor = 3;
+    BufferSizeTarget size_target = 1;
+    sint32 size_value = 2;
+    double threshold_factor = 3;
+    double size_factor = 4;
 }
 
+// Model configures predictive dialer model parameters.
+message Model {
+    bool boost_enabled = 1;
+    sint32 start_boost_duration = 2;
+    sint32 after_hold_boost_duration = 3;
+    bool dynamic_statistic_window_enabled = 4;
+    double overload_control = 5;
+    sint32 latency = 6;
+}
+
+// Init is the first client message on a new stream (RequestMessage.INIT).
 message Init {
+    // Predictive dialing algorithm.
     enum PredictiveType {
         DEFAULT = 0;
         AR_OPTIMIZED = 1; // optimized abandonment rate solution
         BF_OPTIMIZED = 2; // optimized busy factor solution
-        AR_SMALL_GROUP = 3;  // optimized abandonment rate solution for a small group of agents
-        AR_AUTO_BALANCED = 4; // optimized abandonment rate solution with automatic adaptation to agent's count
+        AR_SMALL_GROUP = 3; // optimized abandonment rate for a small agent group
+        AR_AUTO_BALANCED = 4; // abandonment rate with automatic agent-count adaptation
     }
+
+    enum StatisticsSource {
+        STATISTICS_SOURCE_UNSPECIFIED = 0;
+        STATISTICS_SOURCE_INIT = 1;
+        STATISTICS_SOURCE_HISTORY = 2;
+    }
+
+    // Initial dialer statistics used before enough live data is collected.
     Statistic init_stat = 1;
+    StatisticsSource statistics_source = 26;
     sint32 account_id = 2;
     string api_key = 3;
     oneof rule {
         sint32 rule_id = 4;
         string rule_name = 18; // Rule name available only with application
     }
+    // Public IP used by Voximplant to reach the client side of the call.
     string reference_ip = 5;
+    string server_location = 32;
+    // SmartQueue identifier that receives connected calls.
     sint32 queue_id = 6;
-    string session_id = 10; // optional. use to continue processing after disconnect
+    // Optional. Reuse after reconnect to keep accumulated session statistics.
+    string session_id = 10;
 
     double maximum_waiting_time_ms = 11; // deprecated
     double maximum_error_rate = 12; // default: 0.02
     double minimum_busy_factor = 20; // default: 0.8
+    double amd_bf_force_level = 29; // 26,27,28 is free
 
     PredictiveType predictive_type = 21;
     bool use_extended_task_status = 22;
     Buffer buffer = 23;
+    Model model = 24;
 
     sint32 version = 13;
     ACD acd_version = 15;
@@ -57,9 +95,33 @@ message Init {
         sint32 application_id = 16; // for working with SQ
         string application_name = 19;
     }
-    TaskMultiplier task_multiplier = 17; //for progressive
+    // Required for progressive mode (StartProgressive).
+    TaskMultiplier task_multiplier = 17;
+    sint32 priority = 30;
+    sint32 max_simultaneous = 31;
+    sint32 hit_rate_window_sec = 34;
 }
 
+// InitAutomatic is an alternative initialization payload (RequestMessage.INIT_AUTOMATIC).
+message InitAutomatic {
+    string session_id = 1;
+    sint32 account_id = 2;
+    string api_key = 3;
+    string reference_ip = 4;
+    string server_location = 11;
+    oneof rule {
+        sint32 rule_id = 5;
+        string rule_name = 6;
+    }
+    oneof application {
+        sint32 application_id = 7;
+        string application_name = 8;
+    }
+    sint32 priority = 9;
+    sint32 max_simultaneous = 10;
+}
+
+// Statistic holds dialer performance inputs for INIT / SET_STATISTIC.
 message Statistic {
     double avgTimeTalkSec = 1;
     double percentSuccessful = 2;
@@ -67,59 +129,90 @@ message Statistic {
     double avgTotalTimeSec = 4;
 }
 
+// ErrRate updates the maximum abandonment / error rate at runtime.
 message ErrRate {
     double maximum_error_rate = 1;
 }
 
+// BusyFactor updates the minimum busy-factor target at runtime.
 message BusyFactor {
     double minimum_busy_factor = 1;
 }
 
+message MaxSimultaneousTasks {
+    sint32 max_simultaneous = 1;
+}
+
+// PutTasks is a batch of dialing jobs (RequestMessage.PUT_TASKS).
+message PutTasks {
+    repeated PutTask tasks = 1;
+}
+
+// RequestMessage is a client → server envelope on the PDS stream.
 message RequestMessage {
     enum Type {
-        PUT_TASK = 0;
-        INIT = 1;
-        SET_STATISTIC = 2;
-        SET_ERROR_RATE = 3;
-        SET_TASK_MULTIPLIER = 4;
-        SET_BUSY_FACTOR = 5;
-        PING = 10;
+        PUT_TASK = 0; // payload: task
+        INIT = 1; // payload: init
+        INIT_AUTOMATIC = 6; // payload: init_automatic
+        SET_STATISTIC = 2; // payload: statistic
+        SET_ERROR_RATE = 3; // payload: errRate
+        SET_TASK_MULTIPLIER = 4; // payload: taskMultiplier
+        SET_BUSY_FACTOR = 5; // payload: busyFactor
+        FLUSH_BUFFER = 7;
+        PING = 10; // keepalive; expect PONG
+        PUT_TASKS = 11; // payload: tasks (batch upload)
     }
     Type type = 1;
     PutTask task = 2;
     Init init = 3;
+    InitAutomatic init_automatic = 8;
     Statistic statistic = 4;
     ErrRate errRate = 5;
     TaskMultiplier taskMultiplier = 6;
     BusyFactor busyFactor = 7;
+    PutTasks tasks = 9;
 }
 
-
+// GetTask asks the client to submit the given number of tasks.
 message GetTask {
+    // Exact number of PUT_TASK messages the client must send next.
     sint32 count = 1;
+    // Agent IDs currently in Ready status.
+    repeated sint64 user_ids = 2;
 }
 
+// InitResponse acknowledges a successful INIT.
 message InitResponse {
+    // Persist and reuse on reconnect to keep session statistics.
     string session_id = 1;
 }
 
+// TaskEvent reports the lifecycle of a previously submitted task.
 message TaskEvent {
     enum Type {
         STARTED = 0;
         CANCELLED = 1; // cancelled task happens on reconnect with old session id
         FAILED = 2; // failed to start
         UNKNOWN = 3; // we dont know task status
+        EXPIRED = 4;
     }
     string taskUUID = 1;
     Type type = 2;
+    string ms_check_url = 3;
+    string ms_access_url = 4;
+    string started_at = 5;
+    int64 call_session_history_id = 6;
+    string media_session_access_secure_url = 7;
+    int64 result = 8;
 }
 
+// ServiceMessage is a server → client envelope on the PDS stream.
 message ServiceMessage {
     enum Type {
-        GET_TASK = 0;
-        INIT_RESPONSE = 1;
-        TASK_EVENT = 2;
-        PONG = 10;
+        GET_TASK = 0; // payload: request
+        INIT_RESPONSE = 1; // payload: init
+        TASK_EVENT = 2; // payload: event
+        PONG = 10; // response to PING
     }
 
     Type type = 1;
@@ -128,22 +221,16 @@ message ServiceMessage {
     TaskEvent event = 4;
 }
 
-
-enum CompleteType {
-    SUCCESS = 0;
-    FAIL = 1;
-    DIAL_COMPLETE = 2;
-    TRANSFER = 3;
-    AMD_STATUS = 4;
-}
-
-
+// TaskMultiplier controls progressive dialing intensity.
 message TaskMultiplier {
     float multiplier = 1;
 }
 
+// PDS is the Predictive Dialer System service.
 service PDS {
+    // Start opens a predictive dialing session (bidirectional stream).
     rpc Start (stream RequestMessage) returns (stream ServiceMessage);
 
+    // StartProgressive opens a progressive dialing session (bidirectional stream).
     rpc StartProgressive (stream RequestMessage) returns (stream ServiceMessage);
 }

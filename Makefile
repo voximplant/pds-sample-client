@@ -1,9 +1,9 @@
 PROTO_DIR := proto
-GO_GEN_DIR := protogen
+GO_GEN_DIR := api
 PROTO_FILE := $(PROTO_DIR)/pds.proto
 APP_BIN := bin/pds-sample-client
 
-.PHONY: generate install-tools clean regenerate build run
+.PHONY: generate install-tools clean regenerate build run vet
 
 generate:
 	mkdir -p $(GO_GEN_DIR)
@@ -29,3 +29,6 @@ build:
 
 run: build
 	./$(APP_BIN)
+
+vet:
+	go vet ./...

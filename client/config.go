@@ -1,3 +1,4 @@
+// Package client implements a minimal Voximplant PDS gRPC sample session.
 package client
 
 import (
@@ -9,7 +10,7 @@ import (
 	"github.com/ilyakaznacheev/cleanenv"
 )
 
-// Mode selects the gRPC stream method.
+// Mode selects which PDS RPC opens the bidirectional stream.
 type Mode string
 
 const (
@@ -30,7 +31,7 @@ func (m *Mode) SetValue(s string) error {
 	return nil
 }
 
-// PredictiveType selects the PDS dialing algorithm.
+// PredictiveType selects the PDS dialing algorithm sent in INIT.
 type PredictiveType int
 
 const (
@@ -60,8 +61,8 @@ func (p *PredictiveType) SetValue(s string) error {
 	return nil
 }
 
-// Config holds all runtime settings for the PDS sample client.
-// See .env.example for the list of environment variables.
+// Config holds runtime settings for the sample PDS client.
+// See .env.example for the full list of environment variables.
 type Config struct {
 	Address           string         `env:"PDS_ADDRESS" env-default:"pds.voximplant.com:3005"`
 	UseTLS            bool           `env:"PDS_USE_TLS" env-default:"true"`
@@ -72,6 +73,9 @@ type Config struct {
 	ApplicationID     int32          `env:"PDS_APPLICATION_ID"`
 	ReferenceIP       string         `env:"PDS_REFERENCE_IP" env-default:"127.0.0.1"`
 	SessionID         string         `env:"PDS_SESSION_ID"`
+	ServerLocation    string         `env:"PDS_SERVER_LOCATION"`
+	Priority          int32          `env:"PDS_PRIORITY"`
+	MaxSimultaneous   int32          `env:"PDS_MAX_SIMULTANEOUS"`
 	AvgTimeTalkSec    float64        `env:"PDS_AVERAGE_TALK_TIME" env-default:"80"`
 	PercentSuccessful float64        `env:"PDS_SUCCESS_RATE" env-default:"0.4"`
 	MaximumErrorRate  float64        `env:"PDS_MAXIMUM_ERROR_RATE" env-default:"0.05"`
@@ -104,7 +108,7 @@ func LoadConfig() (Config, error) {
 	return cfg, nil
 }
 
-// Validate checks that required fields are set and values are in range.
+// Validate checks required fields and value ranges.
 func (c *Config) Validate() error {
 	if c.Address == "" {
 		return errors.New("address is required")
